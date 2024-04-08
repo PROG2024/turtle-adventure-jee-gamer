@@ -357,28 +357,36 @@ class ChasingEnemy(Enemy):
             self.xstate = self.right
             return
 
-        self.x += -self.speed
+        self.x -= self.speed * math.cos(
+            math.atan(abs(self.game.player.y - self.y) / abs(
+                self.game.player.x - self.x)))
 
     def right(self):
         if self.x > self.game.player.x:
             self.xstate = self.left
             return
 
-        self.x += self.speed
+        self.x += self.speed * math.cos(
+            math.atan(abs(self.game.player.y - self.y) / abs(
+                self.game.player.x - self.x)))
 
     def up(self):
         if self.y < self.game.player.y:
             self.ystate = self.down
             return
 
-        self.y += -self.speed
+        self.y -= self.speed * math.sin(
+            math.atan(abs(self.game.player.y - self.y) / abs(
+                self.game.player.x - self.x)))
 
     def down(self):
         if self.y > self.game.player.y:
             self.ystate = self.up
             return
 
-        self.y += self.speed
+        self.y += self.speed * math.sin(
+            math.atan(abs(self.game.player.y - self.y) / abs(
+                self.game.player.x - self.x)))
 
     def update(self) -> None:  # Movement
         self.xstate()
@@ -483,6 +491,7 @@ class DeDestroyerEnemy(Enemy):
         self.color2 = color
         self.timer = 0
         self.distance_barrel = 50
+        self.fire_rate = int(100/self.game.level)
 
     def create(self) -> None:
         self.__id = self.canvas.create_rectangle(0, 0, 0, 0, fill=self.color2)
@@ -490,8 +499,8 @@ class DeDestroyerEnemy(Enemy):
 
     def update(self) -> None:  # Movement
         self.timer += 1
-        if self.timer % 20 == 0:
-            bomb = Bomb(self.game, self.game.level * 30)
+        if self.timer % self.fire_rate == 0:
+            bomb = Bomb(self.game, 70)
             bomb.x = self.game.player.x + random.randint(-50, 51)
             bomb.y = self.game.player.y + random.randint(-50, 51)
             self.game.add_element(bomb)
@@ -502,7 +511,7 @@ class DeDestroyerEnemy(Enemy):
                            self.y - self.size / 2,
                            self.x + self.size / 2,
                            self.y + self.size / 2)
-        if self.timer % 20 == 0:
+        if self.timer % self.fire_rate == 0:
             self.canvas.itemconfigure(self.__id2, fill='orange')
             self.canvas.coords(self.__id2,
                                self.x,
@@ -535,14 +544,15 @@ class Bomb(Enemy):
 
     def update(self) -> None:  # Movement
         self.timer += 1
+        if self.timer >= 21:
+            self.delete()
+            return
+
         if self.timer >= 20:
             self.canvas.itemconfigure(self.__id, fill='red')
 
             if self.hits_player():
                 self.game.game_over_lose()
-
-        if self.timer >= 21:
-            self.delete()
 
     def render(self) -> None:
         self.canvas.coords(self.__id,
@@ -565,6 +575,13 @@ class EnemyGenerator:
         self.__game: TurtleAdventureGame = game
         self.__level: int = level
 
+        self.__default_enemies = {
+            1: 2,
+            2: 4,
+            3: 6,
+            4: 10
+        }
+
         # example
         self.__game.after(100, self.create_enemy)
         self.__speed = self.__level * 3
@@ -575,6 +592,11 @@ class EnemyGenerator:
             FencingEnemy: ['home', 'green'],
             DeDestroyerEnemy: ['random', 'black']
         }
+
+        self.start_enemy_count = self.__default_enemies[self.__level]
+
+        self.create_start_enemy()
+        self.create_enemy()
 
     @property
     def game(self) -> "TurtleAdventureGame":
@@ -589,6 +611,33 @@ class EnemyGenerator:
         Get the game level
         """
         return self.__level
+
+    def create_start_enemy(self):
+
+        if self.start_enemy_count <= 0:
+            return
+
+        self.start_enemy_count -= 1
+
+        enemy_dict = list(self.enemy_dict.keys())
+        enemy_dict.remove(DeDestroyerEnemy)
+
+        random_enemy = random.choice(list(self.enemy_dict.keys()))
+        enemy = random_enemy(self.__game, 20, self.enemy_dict[random_enemy][1],
+                             self.__speed)
+        position = self.enemy_dict[random_enemy][0]
+
+        if position == "home":
+            enemy.x = self.game.home.x - (self.game.home.size / 2) - 20
+            enemy.y = self.game.home.y - (self.game.home.size / 2) - 20
+        else:
+            enemy.x = random.randint(0, self.__game.screen_width)
+            enemy.y = random.randint(0, self.__game.screen_height)
+            while 40 < enemy.x < 60:
+                enemy.x = random.randint(0, self.__game.screen_width)
+
+        self.game.add_element(enemy)
+        self.game.after(0, self.create_start_enemy)
 
     def create_enemy(self) -> None:
         """
